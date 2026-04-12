@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import os
 import pdfplumber
 import pytesseract
 from PIL import Image
