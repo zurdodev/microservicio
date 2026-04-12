@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-import os
 import pdfplumber
 import pytesseract
 from PIL import Image
@@ -11,134 +10,107 @@ app = Flask(__name__)
 def home():
     return "Microservicio activo en Railway"
 
-@app.route('/extract', methods=['GET','POST'])
+@app.route('/extract', methods=['POST'])
 def extract():
-    return "Ruta /extract funcionando"
+    if 'file' not in request.files:
+        return jsonify({"error": "No se envió ningún archivo"}), 400
 
-
-@app.route('/pdf2json', methods=['POST'])
-def pdf2json():
     file = request.files['file']
-    orden_compra = {}
+    text = ""
 
-    with pdfplumber.open(file) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text() or ""
+    try:
+        # Extraer texto digital u OCR
+        with pdfplumber.open(file) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+                else:
+                    pil_image = page.to_image(resolution=300).original
+                    ocr_text = pytesseract.image_to_string(pil_image, lang="spa")
+                    text += ocr_text + "\n"
 
-            # ---------------- CABECERA ----------------
-            match_noreq = re.search(r"No\. REQ\.\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_noreq:
-                orden_compra["NOREQ"] = match_noreq.group(1)
+        # ---------------------------
+        # REGEX por secciones
+        # ---------------------------
 
-            match_fecha = re.search(r"FECHA\s*/\s*DATE:\s*(\S+)", text, re.IGNORECASE)
-            if match_fecha:
-                orden_compra["FECHA"] = match_fecha.group(1)
+        # CABECERA
+        no_req = re.search(r'No\.?\s*REQ.*?(\d+)', text, re.IGNORECASE)
+        fecha = re.search(r'(?:FECHA|DATE)\s*[:\-]?\s*(\d{2}[/-]\d{2}[/-]\d{4})', text, re.IGNORECASE)
+        pagina = re.search(r'PAG.*?(\d+)', text, re.IGNORECASE)
+        proveedor = re.search(r'(?:PROVEEDOR|SUPPLIER)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        shipto = re.search(r'(?:EMBARCAR A|SHIP TO)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        mes_entrega = re.search(r'Delivery Month\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        billto_nombre = re.search(r'FACTURAR A.*?\n(.+)', text, re.IGNORECASE)
+        billto_direccion = re.search(r'FACTURAR A.*?\n.+\n(.+)', text, re.IGNORECASE)
+        telefono = re.search(r'PHONE\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        fax = re.search(r'FAX\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        rfc = re.search(r'R\.?F\.?C\.?\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
 
-            match_pagina = re.search(r"PAG\.\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_pagina:
-                orden_compra["PAGINA"] = match_pagina.group(1)
+        # POSICIÓN
+        partida = re.search(r'PARTIDA\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
+        item = re.search(r'ITEM\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
+        planta = re.search(r'(?:PLANTA|PLANT)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        unidad = re.search(r'(?:UNIDAD|UNIT)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        material = re.search(r'MATERIAL\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        descripcion = re.search(r'(?:DESCRIPCION|DESCRIPTION)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        cantidad = re.search(r'(?:CANTIDAD|QUANTITY)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        mat_wrl = re.search(r'Mat\.?\s*WRL\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        mm2 = re.search(r'\$MM2\s*[:\-]?\s*([\d.,]+)', text)
+        ton = re.search(r'\$TO\s*[:\-]?\s*([\d.,]+)', text)
+        importe_siniva = re.search(r'(?:IMPORTE S/IVA|AMOUNT)\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
 
-            match_proveedor = re.search(r"PROVEEDOR/SUPPLIER:\s*(.+)", text, re.IGNORECASE)
-            if match_proveedor:
-                orden_compra["PROVEEDOR"] = match_proveedor.group(1).strip()
+        # PIE DE PÁGINA
+        total_cantidad = re.search(r'TOTAL CANTIDAD\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
+        descuento = re.search(r'DESCUENTO\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
+        subtotal = re.search(r'SUBTOTAL\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
+        iva = re.search(r'IVA\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
+        total = re.search(r'TOTAL\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
+        moneda = re.search(r'(?:MONEDA|CURRENCY)\s*[:\-]?\s*([A-Z]{3})', text, re.IGNORECASE)
 
-            match_shipto = re.search(r"EMBARCAR A\s*/SHIP TO:\s*(.+)", text, re.IGNORECASE)
-            if match_shipto:
-                orden_compra["SHIPTO"] = match_shipto.group(1).strip()
+        # ---------------------------
+        # Respuesta JSON
+        # ---------------------------
+        return jsonify({
+            "contenido": text.strip(),
+            "cabecera": {
+                "noreq": no_req.group(1) if no_req else None,
+                "fecha": fecha.group(1) if fecha else None,
+                "pagina": pagina.group(1) if pagina else None,
+                "proveedor": proveedor.group(1) if proveedor else None,
+                "shipto": shipto.group(1) if shipto else None,
+                "mes_entrega": mes_entrega.group(1) if mes_entrega else None,
+                "nombre": billto_nombre.group(1) if billto_nombre else None,
+                "direccion": billto_direccion.group(1) if billto_direccion else None,
+                "telefono": telefono.group(1) if telefono else None,
+                "fax": fax.group(1) if fax else None,
+                "rfc": rfc.group(1) if rfc else None
+            },
+            "posicion": {
+                "partida": partida.group(1) if partida else None,
+                "item": item.group(1) if item else None,
+                "planta": planta.group(1) if planta else None,
+                "unidad": unidad.group(1) if unidad else None,
+                "material": material.group(1) if material else None,
+                "descripcion": descripcion.group(1) if descripcion else None,
+                "cantidad": cantidad.group(1) if cantidad else None,
+                "mat_wrl": mat_wrl.group(1) if mat_wrl else None,
+                "mm2": mm2.group(1) if mm2 else None,
+                "ton": ton.group(1) if ton else None,
+                "importe_siniva": importe_siniva.group(1) if importe_siniva else None
+            },
+            "pie": {
+                "total_cantidad": total_cantidad.group(1) if total_cantidad else None,
+                "descuento": descuento.group(1) if descuento else None,
+                "subtotal": subtotal.group(1) if subtotal else None,
+                "iva": iva.group(1) if iva else None,
+                "total": total.group(1) if total else None,
+                "moneda": moneda.group(1) if moneda else None
+            }
+        })
 
-            match_mes = re.search(r"Delivery Month:\s*(.+)", text, re.IGNORECASE)
-            if match_mes:
-                orden_compra["MES_ENTREGA"] = match_mes.group(1).strip()
-
-            # OCR para bloque Facturar a / Bill To
-            if "Facturar a" in text or "Bill To" in text:
-                for image in page.images:
-                    im = page.crop((image["x0"], image["top"], image["x1"], image["bottom"])).to_image(resolution=300)
-                    pil_img = im.original
-                    ocr_text = pytesseract.image_to_string(pil_img, lang="spa+eng")
-
-                    lines = [l.strip() for l in ocr_text.splitlines() if l.strip()]
-                    if len(lines) > 0:
-                        orden_compra["NOMBRE"] = lines[0]
-                    if len(lines) > 1:
-                        orden_compra["DIRECCION"] = lines[1]
-
-                    match_phone = re.search(r"Phone:\s*(.+)", ocr_text, re.IGNORECASE)
-                    if match_phone:
-                        orden_compra["TELEFONO"] = match_phone.group(1).strip()
-
-                    match_fax = re.search(r"Fax:\s*(.+)", ocr_text, re.IGNORECASE)
-                    if match_fax:
-                        orden_compra["FAX"] = match_fax.group(1).strip()
-
-                    match_rfc = re.search(r"R\.F\.C:\s*(\S+)", ocr_text, re.IGNORECASE)
-                    if match_rfc:
-                        orden_compra["RFC"] = match_rfc.group(1)
-
-            # ---------------- POSICIONES ----------------
-            match_item = re.search(r"ITEM\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_item:
-                orden_compra["ITEM"] = match_item.group(1)
-
-            match_planta = re.search(r"(PLANTA|PLANT)\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_planta:
-                orden_compra["PLANTA"] = match_planta.group(2)
-
-            match_material = re.search(r"MATERIAL\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_material:
-                orden_compra["MATERIAL"] = match_material.group(1)
-
-            match_desc = re.search(r"(DESCRIPCION|DESCRIPTION)\s*:\s*(.+)", text, re.IGNORECASE)
-            if match_desc:
-                orden_compra["DESCRIPCION"] = match_desc.group(2).strip()
-
-            match_cant = re.search(r"(CANTIDAD|QUANTITY)\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_cant:
-                orden_compra["CANTIDAD"] = match_cant.group(2)
-
-            match_matwrl = re.search(r"Mat\. WRL\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_matwrl:
-                orden_compra["MAT_WRL"] = match_matwrl.group(1)
-
-            match_mm2 = re.search(r"\$MM2\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_mm2:
-                orden_compra["MM2"] = match_mm2.group(1)
-
-            match_ton = re.search(r"\$TO\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_ton:
-                orden_compra["TON"] = match_ton.group(1)
-
-            match_imp_siniva = re.search(r"(IMPORTE S/IVA|AMOUNT)\s*:\s*(\S+)", text, re.IGNORECASE)
-            if match_imp_siniva:
-                orden_compra["IMPORTE_SINIVA"] = match_imp_siniva.group(2)
-
-            # ---------------- PIE DE PÁGINA ----------------
-            match_total_cant = re.search(r"TOTAL CANTIDAD:\s*(\S+)", text, re.IGNORECASE)
-            if match_total_cant:
-                orden_compra["TOTAL_CANTIDAD"] = match_total_cant.group(1)
-
-            match_descuento = re.search(r"DESCUENTO:\s*(\S+)", text, re.IGNORECASE)
-            if match_descuento:
-                orden_compra["DESCUENTO"] = match_descuento.group(1)
-
-            match_subtotal = re.search(r"SUBTOTAL:\s*(\S+)", text, re.IGNORECASE)
-            if match_subtotal:
-                orden_compra["SUBTOTAL"] = match_subtotal.group(1)
-
-            match_iva = re.search(r"IVA:\s*(\S+)", text, re.IGNORECASE)
-            if match_iva:
-                orden_compra["IVA"] = match_iva.group(1)
-
-            match_total = re.search(r"TOTAL:\s*(\S+)", text, re.IGNORECASE)
-            if match_total:
-                orden_compra["TOTAL"] = match_total.group(1)
-
-            match_moneda = re.search(r"MONEDA\s*CURRENCY:\s*(\S+)", text, re.IGNORECASE)
-            if match_moneda:
-                orden_compra["MONEDA"] = match_moneda.group(1)
-
-    return jsonify(orden_compra)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
-
