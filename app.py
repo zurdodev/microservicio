@@ -7,6 +7,15 @@ import re
 
 app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "Microservicio activo en Railway"
+
+@app.route('/extract', methods=['GET','POST'])
+def extract():
+    return "Ruta /extract funcionando"
+
+
 @app.route('/pdf2json', methods=['POST'])
 def pdf2json():
     file = request.files['file']
