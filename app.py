@@ -31,25 +31,21 @@ def extract():
                     text += ocr_text + "\n"
 
         # ---------------------------
-        # REGEX por secciones
+        # REGEX para todos los campos planos
         # ---------------------------
-
-        # CABECERA
-        no_req = re.search(r'No\.?\s*REQ.*?(\d+)', text, re.IGNORECASE)
-        fecha = re.search(r'(?:FECHA|DATE)\s*[:\-]?\s*(\d{2}[/-]\d{2}[/-]\d{4})', text, re.IGNORECASE)
+        noreq = re.search(r'No\.?\s*REQ.*?(\d+)', text, re.IGNORECASE)
+        fecha = re.search(r'(?:FECHA|DATE)\s*[:\-]?\s*(\d{2}[/-]\d{2}[/-]\d{4})', text)
         pagina = re.search(r'PAG.*?(\d+)', text, re.IGNORECASE)
         proveedor = re.search(r'(?:PROVEEDOR|SUPPLIER)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
         shipto = re.search(r'(?:EMBARCAR A|SHIP TO)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
         mes_entrega = re.search(r'Delivery Month\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
-        billto_nombre = re.search(r'FACTURAR A.*?\n(.+)', text, re.IGNORECASE)
-        billto_direccion = re.search(r'FACTURAR A.*?\n.+\n(.+)', text, re.IGNORECASE)
+        nombre = re.search(r'FACTURAR A.*?\n(.+)', text, re.IGNORECASE)
+        direccion = re.search(r'FACTURAR A.*?\n.+\n(.+)', text, re.IGNORECASE)
         telefono = re.search(r'PHONE\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
         fax = re.search(r'FAX\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
         rfc = re.search(r'R\.?F\.?C\.?\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
 
-        # POSICIÓN
-        partida = re.search(r'PARTIDA\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
-        item = re.search(r'ITEM\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
+        item = re.search(r'(?:PARTIDA|ITEM)\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
         planta = re.search(r'(?:PLANTA|PLANT)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
         unidad = re.search(r'(?:UNIDAD|UNIT)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
         material = re.search(r'MATERIAL\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
@@ -60,7 +56,6 @@ def extract():
         ton = re.search(r'\$TO\s*[:\-]?\s*([\d.,]+)', text)
         importe_siniva = re.search(r'(?:IMPORTE S/IVA|AMOUNT)\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
 
-        # PIE DE PÁGINA
         total_cantidad = re.search(r'TOTAL CANTIDAD\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
         descuento = re.search(r'DESCUENTO\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
         subtotal = re.search(r'SUBTOTAL\s*[:\-]?\s*([\d.,]+)', text, re.IGNORECASE)
@@ -69,44 +64,36 @@ def extract():
         moneda = re.search(r'(?:MONEDA|CURRENCY)\s*[:\-]?\s*([A-Z]{3})', text, re.IGNORECASE)
 
         # ---------------------------
-        # Respuesta JSON
+        # Respuesta JSON PLANA
         # ---------------------------
         return jsonify({
-            "contenido": text.strip(),
-            "cabecera": {
-                "noreq": no_req.group(1) if no_req else None,
-                "fecha": fecha.group(1) if fecha else None,
-                "pagina": pagina.group(1) if pagina else None,
-                "proveedor": proveedor.group(1) if proveedor else None,
-                "shipto": shipto.group(1) if shipto else None,
-                "mes_entrega": mes_entrega.group(1) if mes_entrega else None,
-                "nombre": billto_nombre.group(1) if billto_nombre else None,
-                "direccion": billto_direccion.group(1) if billto_direccion else None,
-                "telefono": telefono.group(1) if telefono else None,
-                "fax": fax.group(1) if fax else None,
-                "rfc": rfc.group(1) if rfc else None
-            },
-            "posicion": {
-                "partida": partida.group(1) if partida else None,
-                "item": item.group(1) if item else None,
-                "planta": planta.group(1) if planta else None,
-                "unidad": unidad.group(1) if unidad else None,
-                "material": material.group(1) if material else None,
-                "descripcion": descripcion.group(1) if descripcion else None,
-                "cantidad": cantidad.group(1) if cantidad else None,
-                "mat_wrl": mat_wrl.group(1) if mat_wrl else None,
-                "mm2": mm2.group(1) if mm2 else None,
-                "ton": ton.group(1) if ton else None,
-                "importe_siniva": importe_siniva.group(1) if importe_siniva else None
-            },
-            "pie": {
-                "total_cantidad": total_cantidad.group(1) if total_cantidad else None,
-                "descuento": descuento.group(1) if descuento else None,
-                "subtotal": subtotal.group(1) if subtotal else None,
-                "iva": iva.group(1) if iva else None,
-                "total": total.group(1) if total else None,
-                "moneda": moneda.group(1) if moneda else None
-            }
+            "noreq": noreq.group(1) if noreq else None,
+            "fecha": fecha.group(1) if fecha else None,
+            "pagina": pagina.group(1) if pagina else None,
+            "proveedor": proveedor.group(1) if proveedor else None,
+            "shipto": shipto.group(1) if shipto else None,
+            "mes_entrega": mes_entrega.group(1) if mes_entrega else None,
+            "nombre": nombre.group(1) if nombre else None,
+            "direccion": direccion.group(1) if direccion else None,
+            "telefono": telefono.group(1) if telefono else None,
+            "fax": fax.group(1) if fax else None,
+            "rfc": rfc.group(1) if rfc else None,
+            "item": item.group(1) if item else None,
+            "planta": planta.group(1) if planta else None,
+            "unidad": unidad.group(1) if unidad else None,
+            "material": material.group(1) if material else None,
+            "descripcion": descripcion.group(1) if descripcion else None,
+            "cantidad": cantidad.group(1) if cantidad else None,
+            "mat_wrl": mat_wrl.group(1) if mat_wrl else None,
+            "mm2": mm2.group(1) if mm2 else None,
+            "ton": ton.group(1) if ton else None,
+            "importe_siniva": importe_siniva.group(1) if importe_siniva else None,
+            "total_cantidad": total_cantidad.group(1) if total_cantidad else None,
+            "descuento": descuento.group(1) if descuento else None,
+            "subtotal": subtotal.group(1) if subtotal else None,
+            "iva": iva.group(1) if iva else None,
+            "total": total.group(1) if total else None,
+            "moneda": moneda.group(1) if moneda else None
         })
 
     except Exception as e:
